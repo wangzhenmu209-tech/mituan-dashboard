@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>米团日报反馈看板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        .section-bar {
+            height: 8px;
+            border-radius: 4px;
+            background: #e5e7eb;
+            overflow: hidden;
+        }
+        .section-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        .loading {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <header class="gradient-bg text-white py-8">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold">🎯 米团日报反馈看板</h1>
+                    <p class="mt-2 opacity-90">数据驱动 · 持续优化 · 用户至上</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm opacity-80">最后更新</div>
+                    <div class="text-xl font-semibold" id="lastUpdate">--</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-6 py-8">
+        <!-- 今日数据速览 -->
+        <section class="mb-8">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">📊 今日数据速览</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="card p-6 text-center">
+                    <div class="text-3xl font-bold text-blue-600 loading" id="totalFeedback">--</div>
+                    <div class="text-gray-600 mt-1">总反馈数</div>
+                </div>
+                <div class="card p-6 text-center">
+                    <div class="text-3xl font-bold text-green-600 loading" id="goodRate">--</div>
+                    <div class="text-gray-600 mt-1">好评率</div>
+                </div>
+                <div class="card p-6 text-center">
+                    <div class="text-3xl font-bold text-purple-600 loading" id="hotSection">--</div>
+                    <div class="text-gray-600 mt-1">热门板块</div>
+                </div>
+                <div class="card p-6 text-center">
+                    <div class="text-3xl font-bold text-orange-600 loading" id="sentStatus">--</div>
+                    <div class="text-gray-600 mt-1">发送状态</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7日趋势图 -->
+        <section class="mb-8">
+            <div class="card p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">📈 7日趋势</h2>
+                <canvas id="trendChart" height="100"></canvas>
+            </div>
+        </section>
+
+        <!-- 板块热度排行 -->
+        <section class="mb-8">
+            <div class="card p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">🏆 板块热度排行</h2>
+                <div id="sectionRanking" class="space-y-4">
+                    <div class="text-gray-500 text-center py-8">暂无数据</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 最新反馈 -->
+        <section class="mb-8">
+            <div class="card p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">💬 最新反馈</h2>
+                <div id="latestFeedback" class="space-y-3">
+                    <div class="text-gray-500 text-center py-8">暂无反馈</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 优化建议 -->
+        <section class="mb-8">
+            <div class="card p-6 bg-gradient-to-r from-blue-50 to-purple-50">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">🎯 智能优化建议</h2>
+                <div id="optimizationTips" class="space-y-2">
+                    <div class="flex items-start gap-3">
+                        <span class="text-blue-600">💡</span>
+                        <span class="text-gray-700">数据积累中，建议持续收集反馈以生成优化建议...</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="text-center py-8 text-gray-500">
+        <p>— 米团 🎯 | 数据驱动持续优化 —</p>
+    </footer>
+
+    <script>
+        // API 基础地址
+        const API_BASE = window.location.origin;
+        
+        // 初始化
+        async function init() {
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleString('zh-CN');
+            await loadData();
+        }
+        
+        // 加载数据
+        async function loadData() {
+            try {
+                const response = await fetch(`${API_BASE}/api/stats`);
+                const result = await response.json();
+                
+                if (result.code === 0) {
+                    renderData(result.data);
+                } else {
+                    console.error('加载失败:', result.message);
+                }
+            } catch (error) {
+                console.error('请求失败:', error);
+                // 使用模拟数据
+                renderMockData();
+            }
+        }
+        
+        // 渲染数据
+        function renderData(data) {
+            // 移除 loading 样式
+            document.getElementById('totalFeedback').classList.remove('loading');
+            document.getElementById('goodRate').classList.remove('loading');
+            document.getElementById('hotSection').classList.remove('loading');
+            document.getElementById('sentStatus').classList.remove('loading');
+            
+            // 今日数据
+            document.getElementById('totalFeedback').textContent = data.today.total;
+            document.getElementById('goodRate').textContent = data.today.goodRate + '%';
+            document.getElementById('hotSection').textContent = data.today.hotSection;
+            document.getElementById('sentStatus').textContent = data.today.sentStatus === '成功' ? '✓' : '✗';
+            
+            // 趋势图
+            renderTrendChart(data.trend);
+            
+            // 板块排行
+            renderSectionRanking(data.sections);
+            
+            // 最新反馈
+            renderLatestFeedback(data.feedbacks);
+            
+            // 优化建议
+            renderOptimizationTips(data);
+        }
+        
+        // 渲染趋势图
+        function renderTrendChart(trendData) {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            
+            const labels = trendData.map(d => d.date.slice(5)); // 只显示 MM-DD
+            const likes = trendData.map(d => d.likes);
+            const dislikes = trendData.map(d => d.dislikes);
+            const suggestions = trendData.map(d => d.suggestions);
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '👍 点赞',
+                            data: likes,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: '👎 点踩',
+                            data: dislikes,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: '💬 建议',
+                            data: suggestions,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+        
+        // 渲染板块排行
+        function renderSectionRanking(sections) {
+            const container = document.getElementById('sectionRanking');
+            
+            if (!sections || sections.length === 0) {
+                container.innerHTML = '<div class="text-gray-500 text-center py-8">暂无数据</div>';
+                return;
+            }
+            
+            container.innerHTML = sections.map((section, index) => `
+                <div class="flex items-center gap-4">
+                    <div class="w-8 text-center font-bold text-gray-500">${index + 1}</div>
+                    <div class="flex-1">
+                        <div class="flex justify-between mb-1">
+                            <span class="font-medium text-gray-700">${section.name}</span>
+                            <span class="text-sm text-gray-500">${section.score}% (${section.total}条)</span>
+                        </div>
+                        <div class="section-bar">
+                            <div class="section-fill ${getScoreColor(section.score)}" style="width: ${section.score}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // 渲染最新反馈
+        function renderLatestFeedback(feedbacks) {
+            const container = document.getElementById('latestFeedback');
+            
+            if (!feedbacks || feedbacks.length === 0) {
+                container.innerHTML = '<div class="text-gray-500 text-center py-8">暂无反馈</div>';
+                return;
+            }
+            
+            container.innerHTML = feedbacks.map(fb => `
+                <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                    <span class="text-2xl">${fb.type}</span>
+                    <div class="flex-1">
+                        <div class="text-gray-700">${fb.content}</div>
+                        <div class="text-sm text-gray-400 mt-1">${fb.section} · ${fb.time}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // 渲染优化建议
+        function renderOptimizationTips(data) {
+            const container = document.getElementById('optimizationTips');
+            const tips = [];
+            
+            if (data.sections && data.sections.length > 0) {
+                const topSection = data.sections[0];
+                if (topSection.score >= 90) {
+                    tips.push(`AI前沿板块好评率${topSection.score}%，建议增加该板块内容深度`);
+                }
+                
+                const lowSection = data.sections.find(s => s.score < 60);
+                if (lowSection) {
+                    tips.push(`${lowSection.name}板块好评率较低(${lowSection.score}%)，建议优化内容质量或减少篇幅`);
+                }
+            }
+            
+            if (tips.length === 0) {
+                tips.push('数据积累中，建议持续收集反馈以生成优化建议...');
+            }
+            
+            container.innerHTML = tips.map(tip => `
+                <div class="flex items-start gap-3">
+                    <span class="text-blue-600">💡</span>
+                    <span class="text-gray-700">${tip}</span>
+                </div>
+            `).join('');
+        }
+        
+        // 辅助函数
+        function getScoreColor(score) {
+            if (score >= 90) return 'bg-green-500';
+            if (score >= 80) return 'bg-blue-500';
+            if (score >= 70) return 'bg-yellow-500';
+            return 'bg-red-500';
+        }
+        
+        // 模拟数据（API失败时使用）
+        function renderMockData() {
+            const mockData = {
+                today: { total: 0, goodRate: 0, hotSection: '-', sentStatus: '暂无数据' },
+                trend: Array(7).fill({ date: '--', likes: 0, dislikes: 0, suggestions: 0 }),
+                sections: [],
+                feedbacks: []
+            };
+            renderData(mockData);
+        }
+        
+        // 启动
+        init();
+    </script>
+</body>
+</html>

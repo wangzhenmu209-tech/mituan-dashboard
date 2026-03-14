@@ -1,0 +1,16 @@
+{
+  "name": "mituan-dashboard",
+  "version": "1.0.0",
+  "description": "米团日报反馈看板",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node api/index.js",
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@vercel/kv": "^1.0.0"
+  },
+  "devDependencies": {
+    "vercel": "^33.0.0"
+  }
+}
